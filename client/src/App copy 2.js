@@ -12,7 +12,7 @@ function App() {
   const [jobId, setJobId] = useState(null);
 
 
-   const [err, setErr] = useState('');
+  // const [err, setErr] = useState('');
 
   let pollInterval;
 
@@ -29,33 +29,50 @@ function App() {
       setJobDetails(null);
       const { data } = await axios.post("http://localhost:5000/run", payload);
       setOutput(data.output);
-      setJobId(data.jobId);
-      setStatus("Submitted.");
-      
-      
-    } catch (error) {
-      if (error.response) {
-        console.log(error.response);
-        console.log("m in if loop");
-        console.log(error.response.data.error);
-        console.log(error.response.data.stderr);
+      if (data.jobId) {
+        setJobId(data.jobId);
+        setStatus("Submitted.");
 
-        setOutput(error.response.data.error.stderr);
-        // The request was made and the server responded with a status code
-        // that falls out of the range of 2xx
-        // if (error.response.data && error.response.data.err) {
-        //   const errMsg = error.response.data.err.stderr;
-        //   setOutput(errMsg);
-      } else if (error.request) {
-        // The request was made but no response was received
-        setOutput("No response received from the server.");
+        // poll here
+        pollInterval = setInterval(async () => {
+          const { data: statusRes } = await axios.get(
+            `http://localhost:5000/status`,
+            {
+              params: {
+                id: data.jobId,
+              },
+            }
+          );
+          const { success, job, error } = statusRes;
+          console.log(statusRes);
+          if (success) {
+            const { status: jobStatus, output: jobOutput } = job;
+            setStatus(jobStatus);
+            setJobDetails(job);
+            if (jobStatus === "pending") return;
+            setOutput(jobOutput);
+            clearInterval(pollInterval);
+          } else {
+            console.error(error);
+            setOutput(error);
+            setStatus("Bad request");
+            clearInterval(pollInterval);
+          }
+        }, 1000);
       } else {
-        // Something happened in setting up the request that triggered an error
-        setOutput("An error occurred. Please retry submitting.");
+        setOutput("Retry again.");
       }
+    } catch ({ response }) {
+      if (response) {
+        const errMsg = response.data.err.stderr;
+        setOutput(errMsg);
+      } else {
+        setOutput("Please retry submitting.");
+      }
+      
     }
+        
   }
-  
 
   return (
     <div className="App">
@@ -95,4 +112,3 @@ function App() {
 }
 
 export default App;
-
